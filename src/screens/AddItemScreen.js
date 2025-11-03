@@ -1,0 +1,580 @@
+/**
+ * Add New Item Screen
+ * Complete form for adding products with barcode scanning
+ */
+
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Colors from '../styles/colors';
+import { unitOptions } from '../database/schema';
+import { createProduct } from '../database/queries/products';
+
+export default function AddItemScreen({ navigation }) {
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    sku: '',
+    barcode: '',
+    category_id: null,
+    description: '',
+    photo_uri: null,
+    purchase_price: '',
+    selling_price: '',
+    current_stock: '',
+    unit: 'pcs',
+    min_stock_threshold: '',
+    expiry_date: '',
+  });
+
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  // Handle input change
+  const handleChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: null }));
+    }
+  };
+
+  // Validate form
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Nama produk wajib diisi';
+    }
+
+    if (formData.selling_price && parseFloat(formData.selling_price) < parseFloat(formData.purchase_price)) {
+      newErrors.selling_price = 'Harga jual tidak boleh lebih rendah dari harga beli';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Save product
+  const handleSave = async () => {
+    if (!validateForm()) {
+      Alert.alert('Error', 'Mohon lengkapi form dengan benar');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Prepare data
+      const productData = {
+        ...formData,
+        purchase_price: parseFloat(formData.purchase_price) || 0,
+        selling_price: parseFloat(formData.selling_price) || 0,
+        current_stock: parseFloat(formData.current_stock) || 0,
+        min_stock_threshold: parseFloat(formData.min_stock_threshold) || 0,
+      };
+
+      await createProduct(productData);
+
+      Alert.alert('Berhasil', 'Produk berhasil ditambahkan', [
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack(),
+        },
+      ]);
+    } catch (error) {
+      console.error('Error saving product:', error);
+      Alert.alert('Error', 'Gagal menyimpan produk: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Open barcode scanner
+  const openBarcodeScanner = () => {
+    navigation.navigate('BarcodeScanner', {
+      onScan: (barcode) => {
+        handleChange('barcode', barcode);
+        // TODO: Check if product exists with this barcode
+      },
+    });
+  };
+
+  // Open camera for photo
+  const openCamera = () => {
+    // TODO: Implement image picker
+    Alert.alert('Coming Soon', 'Fitur foto produk akan segera hadir');
+  };
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <ScrollView 
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Tambah Barang Baru</Text>
+          </View>
+
+          {/* Photo & Barcode Section */}
+          <View style={styles.section}>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity style={styles.actionBtn} onPress={openCamera}>
+                <Text style={styles.actionIcon}>📷</Text>
+                <Text style={styles.actionLabel}>Foto Produk</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.actionBtn} onPress={openBarcodeScanner}>
+                <Text style={styles.actionIcon}>📱</Text>
+                <Text style={styles.actionLabel}>Scan Barcode</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Info Produk */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📦 INFO PRODUK</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Nama Produk <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                style={[styles.input, errors.name && styles.inputError]}
+                placeholder="Contoh: Indomie Goreng"
+                placeholderTextColor="#9CA3AF"
+                value={formData.name}
+                onChangeText={(text) => handleChange('name', text)}
+              />
+              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>SKU</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Stock Keeping Unit (opsional)"
+                placeholderTextColor="#9CA3AF"
+                value={formData.sku}
+                onChangeText={(text) => handleChange('sku', text)}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Barcode</Text>
+              <View style={styles.barcodeInput}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  placeholder="Scan atau input manual"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.barcode}
+                  onChangeText={(text) => handleChange('barcode', text)}
+                  keyboardType="numeric"
+                />
+                {formData.barcode ? (
+                  <TouchableOpacity 
+                    style={styles.clearBtn}
+                    onPress={() => handleChange('barcode', '')}
+                  >
+                    <Text style={styles.clearIcon}>✕</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Kategori</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => {
+                  Alert.alert('Coming Soon', 'Pilihan kategori akan segera hadir');
+                }}
+              >
+                <Text style={styles.pickerText}>
+                  {formData.category_id ? 'Kategori dipilih' : 'Pilih Kategori'}
+                </Text>
+                <Text style={styles.pickerIcon}>▼</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Harga & Stok */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>💰 HARGA & STOK</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Harga Beli</Text>
+              <View style={styles.priceInput}>
+                <Text style={styles.currencyLabel}>Rp</Text>
+                <TextInput
+                  style={[styles.input, styles.priceInputField]}
+                  placeholder="0"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.purchase_price}
+                  onChangeText={(text) => handleChange('purchase_price', text.replace(/[^0-9]/g, ''))}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Harga Jual</Text>
+              <View style={styles.priceInput}>
+                <Text style={styles.currencyLabel}>Rp</Text>
+                <TextInput
+                  style={[
+                    styles.input, 
+                    styles.priceInputField,
+                    errors.selling_price && styles.inputError
+                  ]}
+                  placeholder="0"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.selling_price}
+                  onChangeText={(text) => handleChange('selling_price', text.replace(/[^0-9]/g, ''))}
+                  keyboardType="numeric"
+                />
+              </View>
+              {errors.selling_price && (
+                <Text style={styles.errorText}>{errors.selling_price}</Text>
+              )}
+            </View>
+
+            <View style={styles.row}>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Stok Awal</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.current_stock}
+                  onChangeText={(text) => handleChange('current_stock', text.replace(/[^0-9.]/g, ''))}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={{ width: 12 }} />
+
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Satuan</Text>
+                <TouchableOpacity 
+                  style={styles.pickerButton}
+                  onPress={() => {
+                    // TODO: Show unit picker modal
+                    Alert.alert('Unit', 'Unit picker modal');
+                  }}
+                >
+                  <Text style={styles.pickerText}>
+                    {unitOptions.find(u => u.value === formData.unit)?.label || 'Pcs'}
+                  </Text>
+                  <Text style={styles.pickerIcon}>▼</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Peringatan */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>⚠️ PERINGATAN</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Minimum Stok (Alert)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Contoh: 10"
+                placeholderTextColor="#9CA3AF"
+                value={formData.min_stock_threshold}
+                onChangeText={(text) => handleChange('min_stock_threshold', text.replace(/[^0-9]/g, ''))}
+                keyboardType="numeric"
+              />
+              <Text style={styles.hint}>
+                Anda akan mendapat notifikasi jika stok mencapai angka ini
+              </Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Tanggal Kadaluarsa</Text>
+              <TouchableOpacity 
+                style={styles.dateButton}
+                onPress={() => {
+                  Alert.alert('Coming Soon', 'Date picker akan segera hadir');
+                }}
+              >
+                <Text style={styles.dateText}>
+                  {formData.expiry_date || 'Pilih Tanggal (opsional)'}
+                </Text>
+                <Text style={styles.dateIcon}>📅</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Catatan */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📝 CATATAN</Text>
+
+            <View style={styles.inputGroup}>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Catatan tambahan (opsional)"
+                placeholderTextColor="#9CA3AF"
+                value={formData.description}
+                onChangeText={(text) => handleChange('description', text)}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+          </View>
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        {/* Bottom Action Buttons */}
+        <View style={styles.bottomActions}>
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={() => navigation.goBack()}
+            disabled={loading}
+          >
+            <Text style={styles.cancelText}>Batal</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.saveBtn, loading && styles.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={loading}
+          >
+            <Text style={styles.saveText}>
+              {loading ? 'Menyimpan...' : 'Simpan'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+  },
+  container: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+    backgroundColor: Colors.white,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  section: {
+    backgroundColor: Colors.white,
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginBottom: 16,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    backgroundColor: Colors.cardBlue,
+    borderRadius: 12,
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  actionLabel: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textDark,
+    marginBottom: 8,
+  },
+  required: {
+    color: '#EF4444',
+  },
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.textDark,
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  hint: {
+    color: Colors.textLight,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  barcodeInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearBtn: {
+    width: 40,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+  },
+  clearIcon: {
+    fontSize: 18,
+    color: Colors.textLight,
+  },
+  pickerButton: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pickerText: {
+    fontSize: 15,
+    color: Colors.textDark,
+  },
+  pickerIcon: {
+    fontSize: 12,
+    color: Colors.textLight,
+  },
+  priceInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  currencyLabel: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textDark,
+  },
+  priceInputField: {
+    paddingLeft: 42,
+  },
+  row: {
+    flexDirection: 'row',
+  },
+  dateButton: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dateText: {
+    fontSize: 15,
+    color: Colors.textDark,
+  },
+  dateIcon: {
+    fontSize: 20,
+  },
+  textArea: {
+    height: 100,
+    paddingTop: 12,
+  },
+  bottomActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textDark,
+  },
+  saveBtn: {
+    flex: 1,
+    backgroundColor: Colors.cardBlue,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  saveBtnDisabled: {
+    opacity: 0.6,
+  },
+  saveText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.white,
+  },
+});
